@@ -1,7 +1,11 @@
 from rest_framework import viewsets
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
 
 from .models import House
 from .serializers import HouseSerializer
+from .recommendations import calculate_house_score
 
 
 class HouseViewSet(viewsets.ModelViewSet):
@@ -52,3 +56,36 @@ class HouseViewSet(viewsets.ModelViewSet):
             )
 
         return queryset
+
+
+class RecommendationView(APIView):
+
+    def post(self, request):
+
+        preferences = request.data
+
+        houses = House.objects.all()
+
+        recommendations = []
+
+        for house in houses:
+
+            score = calculate_house_score(
+                house,
+                preferences
+            )
+
+            recommendations.append({
+                "house": HouseSerializer(house).data,
+                "score": score
+            })
+
+        recommendations.sort(
+            key=lambda x: x["score"],
+            reverse=True
+        )
+
+        return Response(
+            recommendations,
+            status=status.HTTP_200_OK
+        )
