@@ -25,32 +25,56 @@ class HouseViewSet(viewsets.ModelViewSet):
         furnished = self.request.query_params.get("furnished")
         parking = self.request.query_params.get("parking")
 
+        # -------------------------
+        # FILTER: Location
+        # -------------------------
         if location:
+
             queryset = queryset.filter(
                 location__icontains=location
             )
 
+        # -------------------------
+        # FILTER: Maximum Rent
+        # -------------------------
         if max_rent:
+
             queryset = queryset.filter(
                 rent__lte=max_rent
             )
 
+        # -------------------------
+        # FILTER: Minimum Rent
+        # -------------------------
         if min_rent:
+
             queryset = queryset.filter(
                 rent__gte=min_rent
             )
 
+        # -------------------------
+        # FILTER: Bedrooms
+        # -------------------------
         if bedrooms:
+
             queryset = queryset.filter(
                 bedrooms=bedrooms
             )
 
+        # -------------------------
+        # FILTER: Furnished
+        # -------------------------
         if furnished is not None:
+
             queryset = queryset.filter(
                 furnished=furnished.lower() == "true"
             )
 
+        # -------------------------
+        # FILTER: Parking
+        # -------------------------
         if parking is not None:
+
             queryset = queryset.filter(
                 parking=parking.lower() == "true"
             )
@@ -60,32 +84,242 @@ class HouseViewSet(viewsets.ModelViewSet):
 
 class RecommendationView(APIView):
 
-    def post(self, request):
-
-        preferences = request.data
+    def get_filtered_houses(self, preferences):
 
         houses = House.objects.all()
 
+        max_rent = preferences.get("max_rent")
+        bedrooms = preferences.get("bedrooms")
+        location = preferences.get("location")
+        required_parking = preferences.get(
+            "required_parking"
+        )
+
+        # -------------------------
+        # HARD FILTER: Maximum Rent
+        # -------------------------
+        if max_rent:
+
+            houses = houses.filter(
+                rent__lte=max_rent
+            )
+
+        # -------------------------
+        # HARD FILTER: Bedrooms
+        # -------------------------
+        bedroom_mode = preferences.get(
+            "bedroom_mode",
+            "exact"
+        )
+
+        if bedrooms:
+
+            if bedroom_mode == "minimum":
+
+                houses = houses.filter(
+                    bedrooms__gte=bedrooms
+                )
+
+            else:
+
+                houses = houses.filter(
+                    bedrooms=bedrooms
+                )
+
+        # -------------------------
+        # HARD FILTER: Location
+        # -------------------------
+        if location:
+
+            houses = houses.filter(
+                location__icontains=location
+            )
+
+        # -------------------------
+        # HARD FILTER: Required Parking
+        # -------------------------
+        if required_parking:
+
+            houses = houses.filter(
+                parking=True
+            )
+
+        return houses
+
+    def post(self, request):
+
+        # Copy request data so that we can
+        # safely modify preferences during fallback.
+        preferences = request.data.copy()
+
+        # -------------------------
+        # STRICT SEARCH
+        # -------------------------
+        houses = self.get_filtered_houses(
+            preferences
+        )
+
+        # -------------------------
+        # BUDGET FALLBACK TRACKING
+        # -------------------------
+        relaxed_budget = False
+
+        original_max_rent = preferences.get(
+            "max_rent"
+        )
+
+        relaxed_max_rent = None
+
+        # -------------------------
+        # FALLBACK: RELAX BUDGET
+        # -------------------------
+        if not houses.exists() and original_max_rent:
+
+            original_max_rent = float(
+                original_max_rent
+            )
+
+            # Try progressively higher budgets.
+            relaxation_percentages = [
+                10,
+                20,
+                30
+            ]
+
+            for percentage in relaxation_percentages:
+
+                relaxed_max_rent = (
+                    original_max_rent
+                    * (1 + percentage / 100)
+                )
+
+                relaxed_preferences = (
+                    preferences.copy()
+                )
+
+                relaxed_preferences["max_rent"] = (
+                    relaxed_max_rent
+                )
+
+                houses = self.get_filtered_houses(
+                    relaxed_preferences
+                )
+
+                if houses.exists():
+
+                    # Use relaxed preferences
+                    # for scoring as well.
+                    preferences = (
+                        relaxed_preferences
+                    )
+
+                    relaxed_budget = True
+
+                    break
+
+        # -------------------------
+        # STILL NO RESULTS
+        # -------------------------
+        if not houses.exists():
+
+            return Response(
+                {
+                    "message": (
+                        "No houses matched your "
+                        "requirements."
+                    ),
+                    "recommendations": []
+                },
+                status=status.HTTP_200_OK
+            )
+
+        # -------------------------
+        # SCORE CANDIDATE HOUSES
+        # -------------------------
         recommendations = []
 
         for house in houses:
 
-            score = calculate_house_score(
+            score_result = calculate_house_score(
                 house,
                 preferences
             )
 
-            recommendations.append({
-                "house": HouseSerializer(house).data,
-                "score": score
-            })
+            recommendations.append(
+                {
+                    "house": HouseSerializer(
+                        house
+                    ).data,
 
+                    "score": score_result[
+                        "score"
+                    ],
+
+                    "matched_preferences": (
+                        score_result[
+                            "matched_preferences"
+                        ]
+                    ),
+
+                    "unmatched_preferences": (
+                        score_result[
+                            "unmatched_preferences"
+                        ]
+                    )
+                }
+            )
+
+        # -------------------------
+        # RANK RECOMMENDATIONS
+        # -------------------------
         recommendations.sort(
-            key=lambda x: x["score"],
+            key=lambda x: (
+                x["score"],
+                -x["house"]["rent"],
+                x["house"]["area_sqft"]
+            ),
             reverse=True
         )
 
+        # -------------------------
+        # TOP N
+        # -------------------------
+        top_n = preferences.get(
+            "top_n",
+            5
+        )
+
+        top_n = int(top_n)
+
+        recommendations = recommendations[:top_n]
+
+        # -------------------------
+        # RESPONSE
+        # -------------------------
+        response_data = {
+            "recommendations": recommendations
+        }
+
+        # -------------------------
+        # BUDGET FALLBACK INFORMATION
+        # -------------------------
+        if relaxed_budget:
+
+            response_data["message"] = (
+                "No houses matched your original "
+                "budget. Showing recommendations "
+                "with a slightly higher budget."
+            )
+
+            response_data["original_max_rent"] = (
+                original_max_rent
+            )
+
+            response_data["relaxed_max_rent"] = (
+                relaxed_max_rent
+            )
+
         return Response(
-            recommendations,
+            response_data,
             status=status.HTTP_200_OK
         )
