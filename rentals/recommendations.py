@@ -1,35 +1,157 @@
 def calculate_house_score(house, preferences):
-    """
-    Calculate how well a house matches the user's preferences.
-
-    Maximum score = 100
-    """
 
     score = 0
 
-    # Location match - 30 points
-    if preferences.get("location"):
-        if preferences["location"].lower() in house.location.lower():
+    matched_preferences = []
+    unmatched_preferences = []
+
+    # -------------------------
+    # Location: 30 points
+    # -------------------------
+    location = preferences.get("location")
+
+    if location:
+
+        if location.lower() in house.location.lower():
+
             score += 30
+            matched_preferences.append("location")
 
-    # Budget match - 30 points
-    if preferences.get("max_rent"):
-        if house.rent <= preferences["max_rent"]:
-            score += 30
+        else:
 
-    # Bedroom match - 20 points
-    if preferences.get("bedrooms"):
-        if house.bedrooms == preferences["bedrooms"]:
-            score += 20
+            unmatched_preferences.append("location")
 
-    # Furnished match - 10 points
-    if preferences.get("furnished") is not None:
-        if house.furnished == preferences["furnished"]:
+    # -------------------------
+    # Budget: 25 points
+    # -------------------------
+    max_rent = preferences.get("max_rent")
+
+    if max_rent:
+
+        max_rent = float(max_rent)
+
+        if house.rent <= max_rent:
+
+            budget_ratio = house.rent / max_rent
+
+            budget_score = 25 * budget_ratio
+
+            score += budget_score
+
+            matched_preferences.append("budget")
+
+        else:
+
+            unmatched_preferences.append("budget")
+
+    # -------------------------
+    # Bedrooms: 20 points
+    # -------------------------
+    bedrooms = preferences.get("bedrooms")
+
+    if bedrooms:
+
+        bedrooms = int(bedrooms)
+
+        bedroom_mode = preferences.get(
+            "bedroom_mode",
+            "exact"
+        )
+
+        if bedroom_mode == "minimum":
+
+            if house.bedrooms >= bedrooms:
+
+                if house.bedrooms == bedrooms:
+
+                    score += 20
+
+                else:
+
+                    extra_bedrooms = (
+                        house.bedrooms - bedrooms
+                    )
+
+                    bedroom_score = max(
+                        10,
+                        20 - (extra_bedrooms * 5)
+                    )
+
+                    score += bedroom_score
+
+                matched_preferences.append(
+                    "bedrooms"
+                )
+
+            else:
+
+                unmatched_preferences.append(
+                    "bedrooms"
+                )
+
+        else:
+
+            if house.bedrooms == bedrooms:
+
+                score += 20
+
+                matched_preferences.append(
+                    "bedrooms"
+                )
+
+            else:
+
+                unmatched_preferences.append(
+                    "bedrooms"
+                )
+
+    # -------------------------
+    # Furnished: 15 points
+    # -------------------------
+    furnished = preferences.get("furnished")
+
+    if furnished is not None:
+
+        if house.furnished == furnished:
+
+            score += 15
+
+            matched_preferences.append(
+                "furnished"
+            )
+
+        else:
+
+            unmatched_preferences.append(
+                "furnished"
+            )
+
+    # -------------------------
+    # Parking: 10 points
+    # -------------------------
+    parking = preferences.get("parking")
+
+    if parking is not None:
+
+        if house.parking == parking:
+
             score += 10
 
-    # Parking match - 10 points
-    if preferences.get("parking") is not None:
-        if house.parking == preferences["parking"]:
-            score += 10
+            matched_preferences.append(
+                "parking"
+            )
 
-    return score
+        else:
+
+            unmatched_preferences.append(
+                "parking"
+            )
+
+    # -------------------------
+    # Final result
+    # -------------------------
+    return {
+        "score": round(score, 2),
+        "matched_preferences": matched_preferences,
+        "unmatched_preferences": unmatched_preferences
+    }
