@@ -92,6 +92,7 @@ class RecommendationView(APIView):
         houses = House.objects.all()
 
         max_rent = preferences.get("max_rent")
+        min_rent = preferences.get("min_rent")
         bedrooms = preferences.get("bedrooms")
         location = preferences.get("location")
         required_parking = preferences.get(
@@ -105,6 +106,15 @@ class RecommendationView(APIView):
 
             houses = houses.filter(
                 rent__lte=max_rent
+            )
+
+        # -------------------------
+        # HARD FILTER: Minimum Rent
+        # -------------------------
+        if min_rent:
+
+            houses = houses.filter(
+                rent__gte=min_rent
             )
 
         # -------------------------
@@ -261,10 +271,16 @@ class RecommendationView(APIView):
                     "returned_count": 0,
                     "filters_applied": (
                         original_preferences
-                    )
+                    ),
+                    "budget_relaxed": False
                 },
                 status=status.HTTP_200_OK
             )
+
+        # -------------------------
+        # TOTAL MATCHES
+        # -------------------------
+        total_matches = houses.count()
 
         # -------------------------
         # SCORE CANDIDATE HOUSES
@@ -324,10 +340,8 @@ class RecommendationView(APIView):
             )
         )
 
-        top_n = requested_top_n
-
         recommendations = (
-            recommendations[:top_n]
+            recommendations[:requested_top_n]
         )
 
         # -------------------------
@@ -340,9 +354,7 @@ class RecommendationView(APIView):
             ),
 
             "total_matches": (
-                len(recommendations)
-                if len(recommendations) < top_n
-                else houses.count()
+                total_matches
             ),
 
             "requested_top_n": (
@@ -355,6 +367,10 @@ class RecommendationView(APIView):
 
             "filters_applied": (
                 original_preferences
+            ),
+
+            "budget_relaxed": (
+                relaxed_budget
             )
         }
 
@@ -362,10 +378,6 @@ class RecommendationView(APIView):
         # BUDGET FALLBACK INFORMATION
         # -------------------------
         if relaxed_budget:
-
-            response_data["budget_relaxed"] = (
-                True
-            )
 
             response_data["message"] = (
                 "No houses matched your original "
@@ -380,12 +392,6 @@ class RecommendationView(APIView):
             response_data[
                 "relaxed_max_rent"
             ] = relaxed_max_rent
-
-        else:
-
-            response_data["budget_relaxed"] = (
-                False
-            )
 
         # -------------------------
         # RESPONSE
