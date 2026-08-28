@@ -9,6 +9,62 @@ class HouseSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
+class RecommendationPrioritySerializer(serializers.Serializer):
+
+    # -------------------------
+    # Allowed Priority Levels
+    # -------------------------
+    location = serializers.ChoiceField(
+        choices=[
+            "must_have",
+            "important",
+            "preferred",
+            "optional"
+        ],
+        required=False
+    )
+
+    budget = serializers.ChoiceField(
+        choices=[
+            "must_have",
+            "important",
+            "preferred",
+            "optional"
+        ],
+        required=False
+    )
+
+    bedrooms = serializers.ChoiceField(
+        choices=[
+            "must_have",
+            "important",
+            "preferred",
+            "optional"
+        ],
+        required=False
+    )
+
+    furnished = serializers.ChoiceField(
+        choices=[
+            "must_have",
+            "important",
+            "preferred",
+            "optional"
+        ],
+        required=False
+    )
+
+    parking = serializers.ChoiceField(
+        choices=[
+            "must_have",
+            "important",
+            "preferred",
+            "optional"
+        ],
+        required=False
+    )
+
+
 class RecommendationRequestSerializer(serializers.Serializer):
 
     # -------------------------
@@ -63,7 +119,7 @@ class RecommendationRequestSerializer(serializers.Serializer):
     )
 
     # -------------------------
-    # Parking Preference
+    # Parking
     # -------------------------
     parking = serializers.BooleanField(
         required=False
@@ -73,6 +129,13 @@ class RecommendationRequestSerializer(serializers.Serializer):
     # Required Parking
     # -------------------------
     required_parking = serializers.BooleanField(
+        required=False
+    )
+
+    # -------------------------
+    # Preference Priority
+    # -------------------------
+    priority = RecommendationPrioritySerializer(
         required=False
     )
 
