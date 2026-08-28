@@ -26,15 +26,21 @@ def calculate_house_score(house, preferences):
     # -------------------------
     max_rent = preferences.get("max_rent")
 
-    if max_rent:
+    if max_rent is not None:
 
         max_rent = float(max_rent)
 
         if house.rent <= max_rent:
 
-            budget_ratio = house.rent / max_rent
+            # The cheaper the house relative to the
+            # maximum budget, the better the score.
+            savings_ratio = (
+                max_rent - house.rent
+            ) / max_rent
 
-            budget_score = 25 * budget_ratio
+            budget_score = (
+                15 + (10 * savings_ratio)
+            )
 
             score += budget_score
 
@@ -45,11 +51,32 @@ def calculate_house_score(house, preferences):
             unmatched_preferences.append("budget")
 
     # -------------------------
+    # Minimum Rent: informational
+    # -------------------------
+    min_rent = preferences.get("min_rent")
+
+    if min_rent is not None:
+
+        min_rent = float(min_rent)
+
+        if house.rent >= min_rent:
+
+            matched_preferences.append(
+                "minimum_budget"
+            )
+
+        else:
+
+            unmatched_preferences.append(
+                "minimum_budget"
+            )
+
+    # -------------------------
     # Bedrooms: 20 points
     # -------------------------
     bedrooms = preferences.get("bedrooms")
 
-    if bedrooms:
+    if bedrooms is not None:
 
         bedrooms = int(bedrooms)
 
@@ -58,13 +85,16 @@ def calculate_house_score(house, preferences):
             "exact"
         )
 
+        # -------------------------
+        # Minimum bedroom mode
+        # -------------------------
         if bedroom_mode == "minimum":
 
             if house.bedrooms >= bedrooms:
 
                 if house.bedrooms == bedrooms:
 
-                    score += 20
+                    bedroom_score = 20
 
                 else:
 
@@ -74,10 +104,12 @@ def calculate_house_score(house, preferences):
 
                     bedroom_score = max(
                         10,
-                        20 - (extra_bedrooms * 5)
+                        20 - (
+                            extra_bedrooms * 5
+                        )
                     )
 
-                    score += bedroom_score
+                score += bedroom_score
 
                 matched_preferences.append(
                     "bedrooms"
@@ -89,6 +121,9 @@ def calculate_house_score(house, preferences):
                     "bedrooms"
                 )
 
+        # -------------------------
+        # Exact bedroom mode
+        # -------------------------
         else:
 
             if house.bedrooms == bedrooms:
@@ -148,10 +183,19 @@ def calculate_house_score(house, preferences):
             )
 
     # -------------------------
-    # Final result
+    # Final Score
     # -------------------------
+    score = max(
+        0,
+        min(score, 100)
+    )
+
     return {
         "score": round(score, 2),
-        "matched_preferences": matched_preferences,
-        "unmatched_preferences": unmatched_preferences
+        "matched_preferences": (
+            matched_preferences
+        ),
+        "unmatched_preferences": (
+            unmatched_preferences
+        )
     }
