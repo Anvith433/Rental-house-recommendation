@@ -4,7 +4,10 @@ from rest_framework.response import Response
 from rest_framework import status
 
 from .models import House
-from .serializers import HouseSerializer
+from .serializers import (
+    HouseSerializer,
+    RecommendationRequestSerializer
+)
 from .recommendations import calculate_house_score
 
 
@@ -148,9 +151,22 @@ class RecommendationView(APIView):
 
     def post(self, request):
 
-        # Copy request data so that we can
-        # safely modify preferences during fallback.
-        preferences = request.data.copy()
+        # -------------------------
+        # VALIDATE REQUEST
+        # -------------------------
+        serializer = (
+            RecommendationRequestSerializer(
+                data=request.data
+            )
+        )
+
+        serializer.is_valid(
+            raise_exception=True
+        )
+
+        # Use validated data instead of
+        # directly trusting request.data.
+        preferences = serializer.validated_data.copy()
 
         # -------------------------
         # STRICT SEARCH
@@ -289,9 +305,9 @@ class RecommendationView(APIView):
             5
         )
 
-        top_n = int(top_n)
-
-        recommendations = recommendations[:top_n]
+        recommendations = (
+            recommendations[:top_n]
+        )
 
         # -------------------------
         # RESPONSE
