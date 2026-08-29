@@ -90,7 +90,7 @@ class RecommendationPerformanceTests(TestCase):
     # --------------------------------
     def test_recommendation_query_count(self):
 
-        with self.assertNumQueries(4):
+        with self.assertNumQueries(2):
 
             response = self.client.post(
                 "/api/recommendations/",
