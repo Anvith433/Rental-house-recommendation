@@ -21,5 +21,14 @@ class House(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+
+        indexes = [
+            models.Index(
+                fields=["bedrooms", "rent"],
+                name="house_bedrooms_rent_idx"
+            ),
+        ]
+
     def __str__(self):
         return self.title
