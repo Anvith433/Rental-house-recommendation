@@ -286,9 +286,29 @@ class RecommendationView(APIView):
         total_matches = len(house_list)
 
         # -------------------------
-        # SCORE CANDIDATE HOUSES
+        # REQUESTED TOP N
         # -------------------------
-        recommendations = []
+        requested_top_n = (
+            original_preferences.get(
+                "top_n",
+                5
+            )
+        )
+
+        # ==================================================
+        # SCORE CANDIDATE HOUSES
+        # ==================================================
+        #
+        # IMPORTANT:
+        # We intentionally do NOT serialize the house
+        # or generate its explanation here.
+        #
+        # Only lightweight scoring information is stored.
+        #
+        # This prevents expensive work for candidates
+        # that will never appear in the final Top-N results.
+        #
+        scored_recommendations = []
 
         for house in house_list:
 
@@ -297,6 +317,85 @@ class RecommendationView(APIView):
                 preferences
             )
 
+            scored_recommendations.append(
+                {
+                    "house": house,
+                    "score": score_result[
+                        "score"
+                    ],
+                    "matched_preferences": (
+                        score_result[
+                            "matched_preferences"
+                        ]
+                    ),
+                    "unmatched_preferences": (
+                        score_result[
+                            "unmatched_preferences"
+                        ]
+                    )
+                }
+            )
+
+        # ==================================================
+        # RANK RECOMMENDATIONS
+        # ==================================================
+        #
+        # Ranking is performed using the actual House
+        # object rather than a serialized dictionary.
+        #
+        # This avoids creating thousands of serialized
+        # dictionaries before Top-N selection.
+        #
+        scored_recommendations.sort(
+            key=lambda item: (
+                item["score"],
+                -item["house"].rent,
+                item["house"].area_sqft
+            ),
+            reverse=True
+        )
+
+        # ==================================================
+        # TOP N SELECTION
+        # ==================================================
+        #
+        # Only the best N candidates continue to the
+        # expensive explanation + serialization stage.
+        #
+        top_recommendations = (
+            scored_recommendations[
+                :requested_top_n
+            ]
+        )
+
+        # ==================================================
+        # BUILD FINAL RECOMMENDATIONS
+        # ==================================================
+        recommendations = []
+
+        for recommendation in (
+            top_recommendations
+        ):
+
+            house = recommendation["house"]
+
+            score_result = {
+                "score": recommendation["score"],
+                "matched_preferences": (
+                    recommendation[
+                        "matched_preferences"
+                    ]
+                ),
+                "unmatched_preferences": (
+                    recommendation[
+                        "unmatched_preferences"
+                    ]
+                )
+            }
+
+            # ------------------------------------------
+            # Generate explanation ONLY for Top-N
+            # ------------------------------------------
             explanation = (
                 generate_house_explanation(
                     house,
@@ -305,15 +404,24 @@ class RecommendationView(APIView):
                 )
             )
 
+            # ------------------------------------------
+            # Serialize ONLY Top-N
+            # ------------------------------------------
+            serialized_house = (
+                HouseSerializer(
+                    house
+                ).data
+            )
+
             recommendations.append(
                 {
-                    "house": HouseSerializer(
-                        house
-                    ).data,
+                    "house": serialized_house,
 
-                    "score": score_result[
-                        "score"
-                    ],
+                    "score": (
+                        score_result[
+                            "score"
+                        ]
+                    ),
 
                     "matched_preferences": (
                         score_result[
@@ -330,34 +438,6 @@ class RecommendationView(APIView):
                     "explanation": explanation
                 }
             )
-
-        # -------------------------
-        # RANK RECOMMENDATIONS
-        # -------------------------
-        recommendations.sort(
-            key=lambda x: (
-                x["score"],
-                -x["house"]["rent"],
-                x["house"]["area_sqft"]
-            ),
-            reverse=True
-        )
-
-        # -------------------------
-        # TOP N
-        # -------------------------
-        requested_top_n = (
-            original_preferences.get(
-                "top_n",
-                5
-            )
-        )
-
-        recommendations = (
-            recommendations[
-                :requested_top_n
-            ]
-        )
 
         # -------------------------
         # RESPONSE METADATA

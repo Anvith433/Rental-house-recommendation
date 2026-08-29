@@ -1,7 +1,6 @@
 import time
 
 from django.test import TestCase
-from django.db import connection
 from rest_framework.test import APIClient
 
 from rentals.models import House
@@ -207,3 +206,112 @@ class RecommendationPerformanceTests(TestCase):
             response.data["returned_count"],
             3
         )
+
+    # ==========================================
+    # LARGE-SCALE BENCHMARK
+    # ==========================================
+
+    def run_scale_benchmark(self, house_count):
+
+        # Remove the 500 houses created by setUp().
+        House.objects.all().delete()
+
+        houses = []
+
+        for i in range(house_count):
+
+            houses.append(
+                House(
+                    title=f"Scale Test House {i}",
+                    location=(
+                        "HSR Layout"
+                        if i % 2 == 0
+                        else "Koramangala"
+                    ),
+                    rent=(
+                        20000 + (i % 10) * 1000
+                    ),
+                    bedrooms=(
+                        1 + (i % 3)
+                    ),
+                    bathrooms=2,
+                    furnished=(
+                        i % 2 == 0
+                    ),
+                    parking=(
+                        i % 3 == 0
+                    ),
+                    area_sqft=(
+                        800 + (i % 10) * 100
+                    )
+                )
+            )
+
+        House.objects.bulk_create(
+            houses,
+            batch_size=1000
+        )
+
+        start_time = time.perf_counter()
+
+        response = self.client.post(
+            "/api/recommendations/",
+            {
+                "location": "HSR",
+                "max_rent": 40000,
+                "bedrooms": 2,
+                "bedroom_mode": "exact",
+                "top_n": 5
+            },
+            format="json"
+        )
+
+        elapsed_time = (
+            time.perf_counter() - start_time
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200
+        )
+
+        self.assertLessEqual(
+            response.data["returned_count"],
+            5
+        )
+
+        print(
+            f"\n{house_count:,}-house "
+            f"recommendation response time: "
+            f"{elapsed_time:.4f} seconds"
+        )
+
+        return elapsed_time
+
+    # --------------------------------
+    # SCALE: 1,000 HOUSES
+    # --------------------------------
+    def test_scale_1000_houses(self):
+
+        self.run_scale_benchmark(1000)
+
+    # --------------------------------
+    # SCALE: 5,000 HOUSES
+    # --------------------------------
+    def test_scale_5000_houses(self):
+
+        self.run_scale_benchmark(5000)
+
+    # --------------------------------
+    # SCALE: 10,000 HOUSES
+    # --------------------------------
+    def test_scale_10000_houses(self):
+
+        self.run_scale_benchmark(10000)
+
+    # --------------------------------
+    # SCALE: 50,000 HOUSES
+    # --------------------------------
+    def test_scale_50000_houses(self):
+
+        self.run_scale_benchmark(50000)
