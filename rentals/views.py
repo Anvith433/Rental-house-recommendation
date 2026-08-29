@@ -33,7 +33,6 @@ class HouseViewSet(viewsets.ModelViewSet):
         # FILTER: Location
         # -------------------------
         if location:
-
             queryset = queryset.filter(
                 location__icontains=location
             )
@@ -42,7 +41,6 @@ class HouseViewSet(viewsets.ModelViewSet):
         # FILTER: Maximum Rent
         # -------------------------
         if max_rent:
-
             queryset = queryset.filter(
                 rent__lte=max_rent
             )
@@ -51,7 +49,6 @@ class HouseViewSet(viewsets.ModelViewSet):
         # FILTER: Minimum Rent
         # -------------------------
         if min_rent:
-
             queryset = queryset.filter(
                 rent__gte=min_rent
             )
@@ -60,7 +57,6 @@ class HouseViewSet(viewsets.ModelViewSet):
         # FILTER: Bedrooms
         # -------------------------
         if bedrooms:
-
             queryset = queryset.filter(
                 bedrooms=bedrooms
             )
@@ -69,7 +65,6 @@ class HouseViewSet(viewsets.ModelViewSet):
         # FILTER: Furnished
         # -------------------------
         if furnished is not None:
-
             queryset = queryset.filter(
                 furnished=furnished.lower() == "true"
             )
@@ -78,7 +73,6 @@ class HouseViewSet(viewsets.ModelViewSet):
         # FILTER: Parking
         # -------------------------
         if parking is not None:
-
             queryset = queryset.filter(
                 parking=parking.lower() == "true"
             )
@@ -104,7 +98,6 @@ class RecommendationView(APIView):
         # HARD FILTER: Maximum Rent
         # -------------------------
         if max_rent is not None:
-
             houses = houses.filter(
                 rent__lte=max_rent
             )
@@ -113,7 +106,6 @@ class RecommendationView(APIView):
         # HARD FILTER: Minimum Rent
         # -------------------------
         if min_rent is not None:
-
             houses = houses.filter(
                 rent__gte=min_rent
             )
@@ -144,7 +136,6 @@ class RecommendationView(APIView):
         # HARD FILTER: Location
         # -------------------------
         if location:
-
             houses = houses.filter(
                 location__icontains=location
             )
@@ -153,7 +144,6 @@ class RecommendationView(APIView):
         # HARD FILTER: Required Parking
         # -------------------------
         if required_parking:
-
             houses = houses.filter(
                 parking=True
             )
@@ -175,8 +165,6 @@ class RecommendationView(APIView):
             raise_exception=True
         )
 
-        # Use validated data rather than
-        # directly trusting request.data.
         preferences = (
             serializer.validated_data.copy()
         )
@@ -218,7 +206,6 @@ class RecommendationView(APIView):
                 original_max_rent
             )
 
-            # Try progressively higher budgets.
             relaxation_percentages = [
                 10,
                 20,
@@ -242,14 +229,16 @@ class RecommendationView(APIView):
                     "max_rent"
                 ] = relaxed_max_rent
 
-                houses = self.get_filtered_houses(
-                    relaxed_preferences
+                relaxed_houses = (
+                    self.get_filtered_houses(
+                        relaxed_preferences
+                    )
                 )
 
-                if houses.exists():
+                if relaxed_houses.exists():
 
-                    # Use relaxed preferences
-                    # for filtering and scoring.
+                    houses = relaxed_houses
+
                     preferences = (
                         relaxed_preferences
                     )
@@ -259,9 +248,14 @@ class RecommendationView(APIView):
                     break
 
         # -------------------------
+        # EVALUATE QUERYSET ONCE
+        # -------------------------
+        house_list = list(houses)
+
+        # -------------------------
         # STILL NO RESULTS
         # -------------------------
-        if not houses.exists():
+        if not house_list:
 
             return Response(
                 {
@@ -269,49 +263,40 @@ class RecommendationView(APIView):
                         "No houses matched your "
                         "requirements."
                     ),
-
                     "recommendations": [],
-
                     "total_matches": 0,
-
                     "requested_top_n": (
                         original_preferences.get(
                             "top_n",
                             5
                         )
                     ),
-
                     "returned_count": 0,
-
                     "filters_applied": (
                         original_preferences
                     ),
-
                     "budget_relaxed": False
                 },
-
                 status=status.HTTP_200_OK
             )
 
         # -------------------------
         # TOTAL MATCHES
         # -------------------------
-        total_matches = houses.count()
+        total_matches = len(house_list)
 
         # -------------------------
         # SCORE CANDIDATE HOUSES
         # -------------------------
         recommendations = []
 
-        for house in houses:
+        for house in house_list:
 
             score_result = calculate_house_score(
                 house,
                 preferences
             )
 
-            # Generate human-readable explanation
-            # based on the scoring result.
             explanation = (
                 generate_house_explanation(
                     house,
