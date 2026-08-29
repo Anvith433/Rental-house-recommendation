@@ -9,6 +9,7 @@ from .serializers import (
     RecommendationRequestSerializer
 )
 from .recommendations import calculate_house_score
+from .explanation import generate_house_explanation
 
 
 class HouseViewSet(viewsets.ModelViewSet):
@@ -102,7 +103,7 @@ class RecommendationView(APIView):
         # -------------------------
         # HARD FILTER: Maximum Rent
         # -------------------------
-        if max_rent:
+        if max_rent is not None:
 
             houses = houses.filter(
                 rent__lte=max_rent
@@ -111,7 +112,7 @@ class RecommendationView(APIView):
         # -------------------------
         # HARD FILTER: Minimum Rent
         # -------------------------
-        if min_rent:
+        if min_rent is not None:
 
             houses = houses.filter(
                 rent__gte=min_rent
@@ -125,7 +126,7 @@ class RecommendationView(APIView):
             "exact"
         )
 
-        if bedrooms:
+        if bedrooms is not None:
 
             if bedroom_mode == "minimum":
 
@@ -174,6 +175,8 @@ class RecommendationView(APIView):
             raise_exception=True
         )
 
+        # Use validated data rather than
+        # directly trusting request.data.
         preferences = (
             serializer.validated_data.copy()
         )
@@ -206,12 +209,16 @@ class RecommendationView(APIView):
         # -------------------------
         # FALLBACK: RELAX BUDGET
         # -------------------------
-        if not houses.exists() and original_max_rent:
+        if (
+            not houses.exists()
+            and original_max_rent is not None
+        ):
 
             original_max_rent = float(
                 original_max_rent
             )
 
+            # Try progressively higher budgets.
             relaxation_percentages = [
                 10,
                 20,
@@ -241,6 +248,8 @@ class RecommendationView(APIView):
 
                 if houses.exists():
 
+                    # Use relaxed preferences
+                    # for filtering and scoring.
                     preferences = (
                         relaxed_preferences
                     )
@@ -260,20 +269,27 @@ class RecommendationView(APIView):
                         "No houses matched your "
                         "requirements."
                     ),
+
                     "recommendations": [],
+
                     "total_matches": 0,
+
                     "requested_top_n": (
                         original_preferences.get(
                             "top_n",
                             5
                         )
                     ),
+
                     "returned_count": 0,
+
                     "filters_applied": (
                         original_preferences
                     ),
+
                     "budget_relaxed": False
                 },
+
                 status=status.HTTP_200_OK
             )
 
@@ -292,6 +308,16 @@ class RecommendationView(APIView):
             score_result = calculate_house_score(
                 house,
                 preferences
+            )
+
+            # Generate human-readable explanation
+            # based on the scoring result.
+            explanation = (
+                generate_house_explanation(
+                    house,
+                    preferences,
+                    score_result
+                )
             )
 
             recommendations.append(
@@ -314,7 +340,9 @@ class RecommendationView(APIView):
                         score_result[
                             "unmatched_preferences"
                         ]
-                    )
+                    ),
+
+                    "explanation": explanation
                 }
             )
 
@@ -341,7 +369,9 @@ class RecommendationView(APIView):
         )
 
         recommendations = (
-            recommendations[:requested_top_n]
+            recommendations[
+                :requested_top_n
+            ]
         )
 
         # -------------------------
