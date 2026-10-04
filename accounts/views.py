@@ -98,7 +98,7 @@ class RefreshView(PublicAuthEndpoint):
     refresh token is blacklisted."""
 
     throttle_classes = SCOPED_THROTTLES
-    throttle_scope = "auth"
+    throttle_scope = "refresh"
 
     @extend_schema(
         request=inline_serializer(

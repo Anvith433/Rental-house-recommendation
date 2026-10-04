@@ -152,6 +152,9 @@ REST_FRAMEWORK = {
         "anon": env_str("THROTTLE_ANON", "300/hour"),
         "user": env_str("THROTTLE_USER", "3000/hour"),
         "auth": env_str("THROTTLE_AUTH", "10/minute"),
+        # Refresh runs on every full page load to restore the session, so it
+        # needs more headroom than credential checks.
+        "refresh": env_str("THROTTLE_REFRESH", "120/minute"),
         "register": env_str("THROTTLE_REGISTER", "20/hour"),
         "recommendations": env_str("THROTTLE_RECOMMENDATIONS", "30/minute"),
         "contact": env_str("THROTTLE_CONTACT", "10/hour"),

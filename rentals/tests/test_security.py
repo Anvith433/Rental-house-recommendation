@@ -227,6 +227,14 @@ class ThrottlingTests(TestCase):
             ]
         self.assertEqual(statuses, [401, 401, 401, 429])
 
+    def test_session_refresh_has_its_own_budget(self):
+        rates = {**ScopedRateThrottle.THROTTLE_RATES, "auth": "1/minute", "refresh": "5/minute"}
+        with mock.patch.object(ScopedRateThrottle, "THROTTLE_RATES", rates):
+            client = APIClient()
+            client.post("/api/auth/login/", {"email": "a@b.com", "password": "x"})
+            statuses = [client.post("/api/auth/refresh/").status_code for _ in range(5)]
+        self.assertEqual(statuses, [401] * 5)  # not throttled by the exhausted login budget
+
     def test_recommendations_are_rate_limited_with_retry_hint(self):
         rates = {**ScopedRateThrottle.THROTTLE_RATES, "recommendations": "2/minute"}
         with mock.patch.object(ScopedRateThrottle, "THROTTLE_RATES", rates):
