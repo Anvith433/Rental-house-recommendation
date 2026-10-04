@@ -419,7 +419,7 @@ class RecommendationViewTests(TestCase):
 
         self.assertIn(
             "max_rent",
-            response.data
+            response.data["error"]["details"]
         )
 
     # -------------------------
@@ -443,7 +443,7 @@ class RecommendationViewTests(TestCase):
 
         self.assertIn(
             "bedroom_mode",
-            response.data
+            response.data["error"]["details"]
         )
 
     # -------------------------
@@ -466,7 +466,7 @@ class RecommendationViewTests(TestCase):
 
         self.assertIn(
             "top_n",
-            response.data
+            response.data["error"]["details"]
         )
 
     # -------------------------
@@ -489,9 +489,9 @@ class RecommendationViewTests(TestCase):
         )
 
         self.assertTrue(
-            "rent" in response.data
+            "rent" in response.data["error"]["details"]
             or "non_field_errors"
-            in response.data
+            in response.data["error"]["details"]
         )
 
     # -------------------------
@@ -516,5 +516,5 @@ class RecommendationViewTests(TestCase):
 
         self.assertIn(
             "priority",
-            response.data
+            response.data["error"]["details"]
         )
