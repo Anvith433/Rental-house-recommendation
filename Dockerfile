@@ -35,4 +35,5 @@ HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=5 \
 
 ENTRYPOINT ["/entrypoint.sh"]
 # Shell form so $PORT expands; gunicorn reads its worker count from WEB_CONCURRENCY.
-CMD exec gunicorn config.wsgi:application --bind "0.0.0.0:${PORT}" --access-logfile - --forwarded-allow-ips "*"
+# The control socket is unused, and the unprivileged user cannot create it in /app.
+CMD exec gunicorn config.wsgi:application --bind "0.0.0.0:${PORT}" --access-logfile - --forwarded-allow-ips "*" --no-control-socket
