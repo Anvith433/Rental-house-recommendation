@@ -1,0 +1,43 @@
+# Production-like local stack: PostgreSQL + Django/Gunicorn + nginx/React.
+#   cp .env.example .env   # then set real secrets
+#   docker compose up --build
+# App: http://localhost:8080   API docs: http://localhost:8080/api/docs/
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-rentwise}
+      POSTGRES_USER: ${POSTGRES_USER:-rentwise}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  backend:
+    build: .
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-rentwise}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-rentwise}
+      # nginx is the single trusted proxy in front of Django.
+      NUM_PROXIES: "1"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "${APP_PORT:-8080}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres-data:

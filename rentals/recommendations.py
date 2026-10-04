@@ -1,320 +1,154 @@
-def calculate_house_score(house, preferences):
+"""Weighted, priority-aware scoring of a single property against preferences.
 
-    score = 0
+``calculate_house_score`` is pure (no database access) so it can score tens of
+thousands of candidates per request. Each criterion is evaluated by its own
+small function returning ``(matched, points)`` where ``matched`` is ``None``
+when the user expressed no preference for that criterion.
+"""
 
-    matched_preferences = []
-    unmatched_preferences = []
+from .recommendation_config import (
+    BEDROOM_EXTRA_ROOM_PENALTY,
+    BEDROOM_MINIMUM_POINTS,
+    BUDGET_BASE_POINTS,
+    BUDGET_SAVINGS_POINTS,
+    DEFAULT_PRIORITY,
+    MAX_SCORE,
+    MIN_SCORE,
+    MUST_HAVE_PENALTY,
+    PRIORITY_MULTIPLIERS,
+    SCORING_WEIGHTS,
+)
 
-    # -------------------------
-    # PRIORITY CONFIGURATION
-    # -------------------------
-    priority = preferences.get(
-        "priority",
-        {}
-    )
+# Unmatched preference name -> the priority key that governs it.
+PRIORITY_KEY_FOR_PREFERENCE = {"minimum_budget": "budget"}
 
-    priority_weights = {
-        "must_have": 1.50,
-        "important": 1.25,
-        "preferred": 1.00,
-        "optional": 0.50
-    }
 
-    def get_priority_weight(preference_name):
+def priority_multiplier(priority: dict, criterion: str) -> float:
+    level = priority.get(criterion, DEFAULT_PRIORITY)
+    return PRIORITY_MULTIPLIERS.get(level, PRIORITY_MULTIPLIERS[DEFAULT_PRIORITY])
 
-        preference_priority = priority.get(
-            preference_name,
-            "preferred"
+
+def _score_location(house, location):
+    if not location:
+        return None, 0.0
+    if location.lower() in house.location.lower():
+        return True, float(SCORING_WEIGHTS["location"])
+    return False, 0.0
+
+
+def _score_budget(house, max_rent):
+    if max_rent is None:
+        return None, 0.0
+    max_rent = float(max_rent)
+    if house.rent > max_rent:
+        return False, 0.0
+    savings_ratio = (max_rent - house.rent) / max_rent if max_rent else 0.0
+    return True, BUDGET_BASE_POINTS + BUDGET_SAVINGS_POINTS * savings_ratio
+
+
+def _check_minimum_rent(house, min_rent):
+    """Minimum rent is a match/mismatch signal only; it earns no points."""
+    if min_rent is None:
+        return None, 0.0
+    return house.rent >= float(min_rent), 0.0
+
+
+def _score_bedrooms(house, bedrooms, bedroom_mode):
+    if bedrooms is None:
+        return None, 0.0
+    bedrooms = int(bedrooms)
+    full_points = SCORING_WEIGHTS["bedrooms"]
+
+    if bedroom_mode == "minimum":
+        if house.bedrooms < bedrooms:
+            return False, 0.0
+        extra_rooms = house.bedrooms - bedrooms
+        if extra_rooms == 0:
+            return True, float(full_points)
+        return True, float(
+            max(BEDROOM_MINIMUM_POINTS, full_points - extra_rooms * BEDROOM_EXTRA_ROOM_PENALTY)
         )
 
-        return priority_weights.get(
-            preference_priority,
-            1.00
-        )
+    if house.bedrooms == bedrooms:
+        return True, float(full_points)
+    return False, 0.0
 
-    # -------------------------
-    # Location: 30 points
-    # -------------------------
-    location = preferences.get("location")
 
-    if location:
+def _score_boolean_feature(actual: bool, wanted, criterion: str):
+    if wanted is None:
+        return None, 0.0
+    if actual == wanted:
+        return True, float(SCORING_WEIGHTS[criterion])
+    return False, 0.0
 
-        location_weight = (
-            get_priority_weight("location")
-        )
 
-        location_score = 30 * location_weight
+def calculate_house_score(house, preferences: dict) -> dict:
+    """Score ``house`` against ``preferences``.
 
-        if location.lower() in house.location.lower():
+    Returns ``score`` (0–100, 2 d.p.), the ordered ``matched_preferences`` and
+    ``unmatched_preferences`` lists, and a per-criterion ``breakdown`` of the
+    (priority-weighted) points awarded.
+    """
+    priority = preferences.get("priority") or {}
 
-            score += location_score
+    evaluations = [
+        ("location", "location", _score_location(house, preferences.get("location"))),
+        ("budget", "budget", _score_budget(house, preferences.get("max_rent"))),
+        ("minimum_budget", None, _check_minimum_rent(house, preferences.get("min_rent"))),
+        (
+            "bedrooms",
+            "bedrooms",
+            _score_bedrooms(
+                house, preferences.get("bedrooms"), preferences.get("bedroom_mode", "exact")
+            ),
+        ),
+        (
+            "furnished",
+            "furnished",
+            _score_boolean_feature(house.furnished, preferences.get("furnished"), "furnished"),
+        ),
+        (
+            "parking",
+            "parking",
+            _score_boolean_feature(house.parking, preferences.get("parking"), "parking"),
+        ),
+    ]
 
-            matched_preferences.append(
-                "location"
-            )
+    score = 0.0
+    matched_preferences: list[str] = []
+    unmatched_preferences: list[str] = []
+    breakdown: dict[str, float] = {}
 
+    for name, criterion, (matched, points) in evaluations:
+        if matched is None:
+            continue
+        if matched:
+            matched_preferences.append(name)
         else:
-
-            unmatched_preferences.append(
-                "location"
-            )
-
-    # -------------------------
-    # Budget: 25 points
-    # -------------------------
-    max_rent = preferences.get("max_rent")
-
-    if max_rent is not None:
-
-        max_rent = float(max_rent)
-
-        if house.rent <= max_rent:
-
-            # Calculate how much of the user's
-            # budget is being saved.
-            savings_ratio = (
-                max_rent - house.rent
-            ) / max_rent
-
-            base_budget_score = (
-                15 + (10 * savings_ratio)
-            )
-
-            budget_weight = (
-                get_priority_weight("budget")
-            )
-
-            budget_score = (
-                base_budget_score
-                * budget_weight
-            )
-
-            score += budget_score
-
-            matched_preferences.append(
-                "budget"
-            )
-
-        else:
-
-            unmatched_preferences.append(
-                "budget"
-            )
-
-    # -------------------------
-    # Minimum Rent
-    # -------------------------
-    min_rent = preferences.get("min_rent")
-
-    if min_rent is not None:
-
-        min_rent = float(min_rent)
-
-        if house.rent >= min_rent:
-
-            matched_preferences.append(
-                "minimum_budget"
-            )
-
-        else:
-
-            unmatched_preferences.append(
-                "minimum_budget"
-            )
-
-    # -------------------------
-    # Bedrooms: 20 points
-    # -------------------------
-    bedrooms = preferences.get("bedrooms")
-
-    if bedrooms is not None:
-
-        bedrooms = int(bedrooms)
-
-        bedroom_mode = preferences.get(
-            "bedroom_mode",
-            "exact"
-        )
-
-        bedroom_weight = (
-            get_priority_weight("bedrooms")
-        )
-
-        # -------------------------
-        # Minimum bedroom mode
-        # -------------------------
-        if bedroom_mode == "minimum":
-
-            if house.bedrooms >= bedrooms:
-
-                if house.bedrooms == bedrooms:
-
-                    bedroom_score = 20
-
-                else:
-
-                    extra_bedrooms = (
-                        house.bedrooms - bedrooms
-                    )
-
-                    bedroom_score = max(
-                        10,
-                        20 - (
-                            extra_bedrooms * 5
-                        )
-                    )
-
-                bedroom_score = (
-                    bedroom_score
-                    * bedroom_weight
-                )
-
-                score += bedroom_score
-
-                matched_preferences.append(
-                    "bedrooms"
-                )
-
-            else:
-
-                unmatched_preferences.append(
-                    "bedrooms"
-                )
-
-        # -------------------------
-        # Exact bedroom mode
-        # -------------------------
-        else:
-
-            if house.bedrooms == bedrooms:
-
-                bedroom_score = (
-                    20 * bedroom_weight
-                )
-
-                score += bedroom_score
-
-                matched_preferences.append(
-                    "bedrooms"
-                )
-
-            else:
-
-                unmatched_preferences.append(
-                    "bedrooms"
-                )
-
-    # -------------------------
-    # Furnished: 15 points
-    # -------------------------
-    furnished = preferences.get(
-        "furnished"
-    )
-
-    if furnished is not None:
-
-        furnished_weight = (
-            get_priority_weight("furnished")
-        )
-
-        furnished_score = (
-            15 * furnished_weight
-        )
-
-        if house.furnished == furnished:
-
-            score += furnished_score
-
-            matched_preferences.append(
-                "furnished"
-            )
-
-        else:
-
-            unmatched_preferences.append(
-                "furnished"
-            )
-
-    # -------------------------
-    # Parking: 10 points
-    # -------------------------
-    parking = preferences.get(
-        "parking"
-    )
-
-    if parking is not None:
-
-        parking_weight = (
-            get_priority_weight("parking")
-        )
-
-        parking_score = (
-            10 * parking_weight
-        )
-
-        if house.parking == parking:
-
-            score += parking_score
-
-            matched_preferences.append(
-                "parking"
-            )
-
-        else:
-
-            unmatched_preferences.append(
-                "parking"
-            )
-
-    # -------------------------
-    # MUST-HAVE PENALTY
-    # -------------------------
-    #
-    # A must-have preference that is not
-    # satisfied should have a significant
-    # negative effect on the recommendation.
-    #
-    # Hard filters such as required_parking
-    # are still handled by views.py.
-    #
-    must_have_penalty = 20
-
-    for preference_name in unmatched_preferences:
-
-        if preference_name == "minimum_budget":
-
-            priority_name = "budget"
-
-        else:
-
-            priority_name = preference_name
-
-        if (
-            priority.get(priority_name)
-            == "must_have"
-        ):
-
-            score -= must_have_penalty
-
-    # -------------------------
-    # FINAL SCORE
-    # -------------------------
-    score = max(
-        0,
-        min(score, 100)
-    )
+            unmatched_preferences.append(name)
+        if criterion is not None:
+            weighted = points * priority_multiplier(priority, criterion)
+            breakdown[criterion] = round(weighted, 2)
+            score += weighted
+
+    must_have_failures = must_have_failures_for(unmatched_preferences, priority)
+    score -= MUST_HAVE_PENALTY * len(must_have_failures)
+
+    score = max(MIN_SCORE, min(score, MAX_SCORE))
 
     return {
-        "score": round(
-            score,
-            2
-        ),
-
-        "matched_preferences": (
-            matched_preferences
-        ),
-
-        "unmatched_preferences": (
-            unmatched_preferences
-        )
+        "score": round(score, 2),
+        "matched_preferences": matched_preferences,
+        "unmatched_preferences": unmatched_preferences,
+        "breakdown": breakdown,
     }
+
+
+def must_have_failures_for(unmatched_preferences: list[str], priority: dict) -> list[str]:
+    """Priority keys of unmatched preferences the user marked as must-have."""
+    failures = []
+    for name in unmatched_preferences:
+        key = PRIORITY_KEY_FOR_PREFERENCE.get(name, name)
+        if priority.get(key) == "must_have":
+            failures.append(key)
+    return failures
