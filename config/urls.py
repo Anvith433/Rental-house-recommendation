@@ -25,5 +25,6 @@ urlpatterns = [
     path("api/", include(api_urlpatterns)),
 ]
 
+handler400 = "core.exceptions.json_bad_request"
 handler404 = "core.exceptions.json_not_found"
 handler500 = "core.exceptions.json_server_error"

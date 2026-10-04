@@ -85,6 +85,10 @@ def api_exception_handler(exc, context):
     return response
 
 
+def json_bad_request(request, exception=None):
+    return JsonResponse(error_payload("BAD_REQUEST", "Bad request."), status=400)
+
+
 def json_not_found(request, exception=None):
     return JsonResponse(error_payload("NOT_FOUND", "Not found."), status=404)
 

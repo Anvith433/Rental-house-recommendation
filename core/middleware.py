@@ -5,6 +5,10 @@ import re
 import time
 import uuid
 
+from django.http import JsonResponse
+
+from .health import health_status
+
 from .request_context import request_id_var, user_id_var
 
 REQUEST_ID_HEADER = "X-Request-ID"
@@ -13,6 +17,27 @@ REQUEST_ID_HEADER = "X-Request-ID"
 _VALID_REQUEST_ID = re.compile(r"^[A-Za-z0-9._-]{8,64}$")
 
 access_logger = logging.getLogger("rentwise.access")
+
+
+HEALTH_PATH = "/api/health/"
+
+
+class HealthCheckMiddleware:
+    """Answers health probes before host validation and HTTPS redirects.
+
+    Platform probes (Docker, Render, load balancers) call the service by an
+    internal address that is deliberately absent from ALLOWED_HOSTS. The
+    response carries only up/down information, so serving it for any host is safe.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        if request.path == HEALTH_PATH and request.method in ("GET", "HEAD"):
+            payload, status_code = health_status()
+            return JsonResponse(payload, status=status_code)
+        return self.get_response(request)
 
 
 class RequestIDMiddleware:

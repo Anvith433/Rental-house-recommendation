@@ -25,10 +25,14 @@ RUN useradd --system --uid 10001 --home /app rentwise \
     && chmod +x /entrypoint.sh
 
 USER rentwise
+# Listens on $PORT when the host provides one (Render sets 10000), else 8000.
+ENV PORT=8000 \
+    WEB_CONCURRENCY=3
 EXPOSE 8000
 
 HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=5 \
-  CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/health/', timeout=4).status == 200 else 1)"
+  CMD python -c "import os,urllib.request,sys; sys.exit(0 if urllib.request.urlopen(f'http://localhost:{os.environ[\"PORT\"]}/api/health/', timeout=4).status == 200 else 1)"
 
 ENTRYPOINT ["/entrypoint.sh"]
-CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3", "--access-logfile", "-", "--forwarded-allow-ips", "*"]
+# Shell form so $PORT expands; gunicorn reads its worker count from WEB_CONCURRENCY.
+CMD exec gunicorn config.wsgi:application --bind "0.0.0.0:${PORT}" --access-logfile - --forwarded-allow-ips "*"

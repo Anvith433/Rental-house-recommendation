@@ -1,0 +1,68 @@
+# Render Blueprint: free hosting for RentWise.
+#   rentwise-api : Django API (Docker, free web service)
+#   rentwise     : React frontend (free static site) that proxies /api to the API
+# The database is a free Neon PostgreSQL project (Render's free Postgres is
+# deleted after 30 days). Step-by-step guide: DEPLOYMENT.md
+services:
+  - type: web
+    name: rentwise-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health/
+    envVars:
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false # paste your Neon connection string when prompted
+      - key: CSRF_TRUSTED_ORIGINS
+        sync: false # your frontend URL, e.g. https://rentwise.onrender.com
+      - key: SEED_DEMO_PASSWORD
+        sync: false # password for the demo accounts created on first start
+      - key: SEED_ON_START
+        value: "true"
+      - key: WEB_CONCURRENCY
+        value: "2" # fits the free plan's 512 MB of memory
+      - key: DB_CONN_MAX_AGE
+        value: "0" # Neon scales to zero; don't hold idle connections
+
+  - type: web
+    name: rentwise
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+    routes:
+      # Same-origin API: the browser talks only to this site, so the HttpOnly
+      # refresh cookie works without cross-site CORS. If Render gives the API a
+      # different URL than rentwise-api.onrender.com, update these three lines.
+      - type: rewrite
+        source: /api/*
+        destination: https://rentwise-api.onrender.com/api/*
+      - type: rewrite
+        source: /django-admin/*
+        destination: https://rentwise-api.onrender.com/django-admin/*
+      - type: rewrite
+        source: /static/*
+        destination: https://rentwise-api.onrender.com/static/*
+      # Single-page app: every other path serves index.html.
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: same-origin
+      - path: /*
+        name: Content-Security-Policy
+        value: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' https: data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
