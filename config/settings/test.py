@@ -1,10 +1,11 @@
 """Settings for the automated test suite."""
 
 from .base import *  # noqa: F401,F403
-from .base import REST_FRAMEWORK
+from .base import REST_FRAMEWORK, jwt_settings
 from .env import env_str
 
 SECRET_KEY = "test-only-secret-key-not-used-anywhere-else-0123456789"
+SIMPLE_JWT = jwt_settings(SECRET_KEY)
 
 ALLOWED_HOSTS = ["testserver", "localhost"]
 

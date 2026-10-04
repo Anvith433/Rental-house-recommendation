@@ -34,6 +34,18 @@ from .tokens import (
 AccessTokenSerializer = inline_serializer("AccessToken", {"access": serializers.CharField()})
 
 
+class PublicAuthEndpoint(APIView):
+    """Base for credential endpoints: no request authentication, but failed
+    credentials still produce 401 (DRF would otherwise downgrade to 403 when
+    a view has no authenticators to supply a WWW-Authenticate header)."""
+
+    permission_classes = [AllowAny]
+    authentication_classes: list = []
+
+    def get_authenticate_header(self, request):
+        return 'Bearer realm="api"'
+
+
 def _token_response(user, status_code=status.HTTP_200_OK) -> Response:
     access, refresh = issue_tokens(user)
     response = Response({"access": access, "user": UserSerializer(user).data}, status=status_code)
@@ -41,11 +53,9 @@ def _token_response(user, status_code=status.HTTP_200_OK) -> Response:
     return response
 
 
-class RegisterView(APIView):
+class RegisterView(PublicAuthEndpoint):
     """Create an account and sign the new user in."""
 
-    permission_classes = [AllowAny]
-    authentication_classes = []
     throttle_classes = SCOPED_THROTTLES
     throttle_scope = "register"
 
@@ -57,12 +67,10 @@ class RegisterView(APIView):
         return _token_response(user, status.HTTP_201_CREATED)
 
 
-class LoginView(APIView):
+class LoginView(PublicAuthEndpoint):
     """Exchange email + password for an access token (body) and a refresh
     token (HttpOnly cookie)."""
 
-    permission_classes = [AllowAny]
-    authentication_classes = []
     throttle_classes = SCOPED_THROTTLES
     throttle_scope = "auth"
 
@@ -85,12 +93,10 @@ class LoginView(APIView):
         return _token_response(user)
 
 
-class RefreshView(APIView):
+class RefreshView(PublicAuthEndpoint):
     """Rotate the refresh token and return a new access token. The previous
     refresh token is blacklisted."""
 
-    permission_classes = [AllowAny]
-    authentication_classes = []
     throttle_classes = SCOPED_THROTTLES
     throttle_scope = "auth"
 
@@ -122,12 +128,10 @@ class RefreshView(APIView):
         return response
 
 
-class LogoutView(APIView):
+class LogoutView(PublicAuthEndpoint):
     """Blacklist the refresh token and clear the cookie. Access tokens expire
     on their own within ``JWT_ACCESS_TOKEN_MINUTES``."""
 
-    permission_classes = [AllowAny]
-    authentication_classes = []
 
     @extend_schema(request=None, responses={204: None})
     def post(self, request):

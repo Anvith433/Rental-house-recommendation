@@ -8,12 +8,13 @@ X-Forwarded-Proto.
 from django.core.exceptions import ImproperlyConfigured
 
 from .base import *  # noqa: F401,F403
-from .base import DATABASES
+from .base import DATABASES, jwt_settings
 from .env import env_bool, env_int, env_list, env_required
 
 DEBUG = False
 
 SECRET_KEY = env_required("DJANGO_SECRET_KEY")
+SIMPLE_JWT = jwt_settings(SECRET_KEY)
 
 ALLOWED_HOSTS = env_list("ALLOWED_HOSTS")
 if not ALLOWED_HOSTS:

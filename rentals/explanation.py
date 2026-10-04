@@ -119,24 +119,35 @@ def generate_house_explanation(house, preferences, score_result, budget_context=
     """Explain why ``house`` received ``score_result``.
 
     ``budget_context`` (optional) carries ``original_max_rent`` when the
-    engine had to relax the budget, so the explanation can state plainly that
-    a property costs more than the user originally asked for.
+    engine had to relax the budget. Scores are computed against the relaxed
+    budget, but the explanation stays honest to what the user asked for: a
+    property above the original budget is described as exceeding it.
     """
-    matched = score_result.get("matched_preferences", [])
-    unmatched = score_result.get("unmatched_preferences", [])
+    matched = list(score_result.get("matched_preferences", []))
+    unmatched = list(score_result.get("unmatched_preferences", []))
     priority = preferences.get("priority") or {}
+
+    original_max_rent = (budget_context or {}).get("original_max_rent")
+    over_original_budget = original_max_rent is not None and house.rent > float(original_max_rent)
+    if over_original_budget:
+        preferences = {**preferences, "max_rent": original_max_rent}
+        if "budget" in matched:
+            matched.remove("budget")
+            unmatched.insert(0, "budget")
 
     strengths: list[str] = []
     weaknesses: list[str] = []
     for explain in _EXPLAINERS:
         explain(preferences, matched, unmatched, strengths, weaknesses, house)
 
-    original_max_rent = (budget_context or {}).get("original_max_rent")
-    if original_max_rent is not None and house.rent > float(original_max_rent):
-        weaknesses.append(
-            f"Rent is {_rupees(house.rent - float(original_max_rent))} above your original "
-            f"budget of {_rupees(original_max_rent)} (shown because the budget was relaxed)"
-        )
+    if over_original_budget:
+        overage = house.rent - float(original_max_rent)
+        weaknesses = [
+            f"{line} by {_rupees(overage)} (shown because the budget was relaxed)"
+            if line.startswith("Exceeds your maximum budget")
+            else line
+            for line in weaknesses
+        ]
 
     return {
         "summary": _summarise(matched, unmatched, must_have_failures_for(unmatched, priority)),

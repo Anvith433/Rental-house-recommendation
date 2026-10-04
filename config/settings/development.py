@@ -5,13 +5,14 @@ DATABASE_URL to use PostgreSQL), relaxed cookie security for plain HTTP.
 """
 
 from .base import *  # noqa: F401,F403
-from .base import REST_FRAMEWORK
+from .base import REST_FRAMEWORK, jwt_settings
 from .env import env_list, env_str
 
 DEBUG = True
 
 # A development-only key. Production refuses to start without DJANGO_SECRET_KEY.
 SECRET_KEY = env_str("DJANGO_SECRET_KEY") or "dev-only-insecure-key-do-not-use-in-production"
+SIMPLE_JWT = jwt_settings(SECRET_KEY)
 
 ALLOWED_HOSTS = env_list("ALLOWED_HOSTS", ["localhost", "127.0.0.1", "0.0.0.0"])
 

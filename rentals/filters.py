@@ -5,6 +5,17 @@ from .choices import ListingStatus, PropertyType
 from .models import MAX_RENT, MAX_ROOMS, House
 
 
+BOOLEAN_CHOICES = (("true", "true"), ("false", "false"))
+
+
+def strict_boolean_filter(field_name: str) -> django_filters.TypedChoiceFilter:
+    """Accepts only ``true``/``false``; anything else is a validation error
+    rather than being silently ignored."""
+    return django_filters.TypedChoiceFilter(
+        field_name=field_name, choices=BOOLEAN_CHOICES, coerce=lambda value: value == "true"
+    )
+
+
 class PropertyFilter(django_filters.FilterSet):
     """Database-level property search. Invalid values produce a 400 response."""
 
@@ -27,8 +38,8 @@ class PropertyFilter(django_filters.FilterSet):
     )
     min_area = django_filters.NumberFilter(field_name="area_sqft", lookup_expr="gte", min_value=0)
     max_area = django_filters.NumberFilter(field_name="area_sqft", lookup_expr="lte", min_value=0)
-    furnished = django_filters.BooleanFilter()
-    parking = django_filters.BooleanFilter()
+    furnished = strict_boolean_filter("furnished")
+    parking = strict_boolean_filter("parking")
     property_type = django_filters.ChoiceFilter(choices=PropertyType.choices)
     available_by = django_filters.DateFilter(method="filter_available_by")
     status = django_filters.ChoiceFilter(choices=ListingStatus.choices)

@@ -103,12 +103,18 @@ SIMPLE_JWT = {
     "BLACKLIST_AFTER_ROTATION": True,
     "UPDATE_LAST_LOGIN": True,
     "ALGORITHM": "HS256",
-    # Falls back to SECRET_KEY when JWT_SIGNING_KEY is not provided.
-    "SIGNING_KEY": env_str("JWT_SIGNING_KEY") or None,
+    # SIGNING_KEY is set by each environment module via jwt_settings().
     "AUTH_HEADER_TYPES": ("Bearer",),
     "USER_ID_FIELD": "id",
     "USER_ID_CLAIM": "user_id",
 }
+
+
+
+def jwt_settings(secret_key: str) -> dict:
+    """SIMPLE_JWT with its signing key: JWT_SIGNING_KEY, else SECRET_KEY."""
+    return {**SIMPLE_JWT, "SIGNING_KEY": env_str("JWT_SIGNING_KEY") or secret_key}
+
 
 # The refresh token is delivered as an HttpOnly cookie so browser JavaScript
 # can never read it. The short-lived access token lives only in memory.
