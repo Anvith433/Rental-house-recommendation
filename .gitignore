@@ -13,3 +13,5 @@ frontend/dist/
 .coverage
 htmlcov/
 .pytest_cache/
+!frontend/.env.example
+frontend/node_modules/
