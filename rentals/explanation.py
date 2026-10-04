@@ -1,302 +1,145 @@
-def generate_house_explanation(
-    house,
-    preferences,
-    score_result
-):
-    """
-    Generate a human-readable explanation
-    for why a house received its recommendation score.
-    """
+"""Deterministic, data-grounded explanations for recommendation scores.
 
-    matched_preferences = score_result.get(
-        "matched_preferences",
-        []
-    )
+Every sentence is derived from the property's actual attributes and the
+user's preferences – no templates are filled with invented facts and no
+language model is involved.
+"""
 
-    unmatched_preferences = score_result.get(
-        "unmatched_preferences",
-        []
-    )
+from .recommendations import must_have_failures_for
 
-    priority = preferences.get(
-        "priority",
-        {}
-    )
 
-    strengths = []
-    weaknesses = []
+def _rupees(amount) -> str:
+    return f"₹{float(amount):,.0f}"
 
-    # -------------------------
-    # LOCATION EXPLANATION
-    # -------------------------
+
+def _explain_location(preferences, matched, unmatched, strengths, weaknesses, house):
     location = preferences.get("location")
+    if "location" in matched:
+        strengths.append(f"Matches your preferred location: {location}")
+    elif "location" in unmatched:
+        weaknesses.append(f"Does not match your preferred location: {location}")
 
-    if "location" in matched_preferences:
 
-        strengths.append(
-            f"Matches your preferred location: "
-            f"{location}"
-        )
-
-    elif "location" in unmatched_preferences:
-
-        weaknesses.append(
-            f"Does not match your preferred "
-            f"location: {location}"
-        )
-
-    # -------------------------
-    # BUDGET EXPLANATION
-    # -------------------------
+def _explain_budget(preferences, matched, unmatched, strengths, weaknesses, house):
     max_rent = preferences.get("max_rent")
-
-    if "budget" in matched_preferences:
-
-        if max_rent is not None:
-
-            savings = (
-                float(max_rent)
-                - float(house.rent)
+    if "budget" in matched and max_rent is not None:
+        savings = float(max_rent) - float(house.rent)
+        if savings > 0:
+            strengths.append(
+                f"Within your maximum budget of {_rupees(max_rent)}, saving {_rupees(savings)}"
             )
+        else:
+            strengths.append(f"Matches your maximum budget of {_rupees(max_rent)}")
+    elif "budget" in unmatched:
+        weaknesses.append(f"Exceeds your maximum budget of {_rupees(max_rent)}")
 
-            if savings > 0:
-
-                strengths.append(
-                    f"Within your maximum budget of "
-                    f"₹{float(max_rent):,.0f}, "
-                    f"saving ₹{savings:,.0f}"
-                )
-
-            else:
-
-                strengths.append(
-                    f"Matches your maximum budget "
-                    f"of ₹{float(max_rent):,.0f}"
-                )
-
-    elif "budget" in unmatched_preferences:
-
-        weaknesses.append(
-            f"Exceeds your maximum budget of "
-            f"₹{float(max_rent):,.0f}"
-        )
-
-    # -------------------------
-    # MINIMUM RENT EXPLANATION
-    # -------------------------
     min_rent = preferences.get("min_rent")
+    if "minimum_budget" in matched:
+        strengths.append(f"Meets your minimum budget of {_rupees(min_rent)}")
+    elif "minimum_budget" in unmatched:
+        weaknesses.append(f"Below your minimum budget of {_rupees(min_rent)}")
 
-    if "minimum_budget" in matched_preferences:
 
-        strengths.append(
-            f"Meets your minimum budget of "
-            f"₹{float(min_rent):,.0f}"
-        )
-
-    elif "minimum_budget" in unmatched_preferences:
-
-        weaknesses.append(
-            f"Below your minimum budget of "
-            f"₹{float(min_rent):,.0f}"
-        )
-
-    # -------------------------
-    # BEDROOM EXPLANATION
-    # -------------------------
+def _explain_bedrooms(preferences, matched, unmatched, strengths, weaknesses, house):
     bedrooms = preferences.get("bedrooms")
-
-    bedroom_mode = preferences.get(
-        "bedroom_mode",
-        "exact"
-    )
-
-    if "bedrooms" in matched_preferences:
-
-        if bedroom_mode == "minimum":
-
+    minimum_mode = preferences.get("bedroom_mode", "exact") == "minimum"
+    if "bedrooms" in matched:
+        if minimum_mode:
             strengths.append(
-                f"Has {house.bedrooms} bedrooms, "
-                f"meeting your minimum requirement "
-                f"of {bedrooms}"
+                f"Has {house.bedrooms} bedrooms, meeting your minimum requirement of {bedrooms}"
             )
-
         else:
-
-            strengths.append(
-                f"Matches your {bedrooms}-bedroom "
-                f"requirement"
-            )
-
-    elif "bedrooms" in unmatched_preferences:
-
-        if bedroom_mode == "minimum":
-
+            strengths.append(f"Matches your {bedrooms}-bedroom requirement")
+    elif "bedrooms" in unmatched:
+        if minimum_mode:
             weaknesses.append(
-                f"Has only {house.bedrooms} bedrooms; "
-                f"you requested at least {bedrooms}"
+                f"Has only {house.bedrooms} bedrooms; you requested at least {bedrooms}"
             )
-
         else:
-
             weaknesses.append(
-                f"Has {house.bedrooms} bedrooms instead "
-                f"of your requested {bedrooms}"
+                f"Has {house.bedrooms} bedrooms instead of your requested {bedrooms}"
             )
 
-    # -------------------------
-    # FURNISHED EXPLANATION
-    # -------------------------
+
+def _explain_furnished(preferences, matched, unmatched, strengths, weaknesses, house):
     furnished = preferences.get("furnished")
+    if furnished is None:
+        return
+    if "furnished" in matched:
+        strengths.append("Furnished as requested" if furnished else "Unfurnished as requested")
+    elif "furnished" in unmatched:
+        weaknesses.append(
+            "The house is not furnished as requested"
+            if furnished
+            else "The house is furnished, but you requested an unfurnished property"
+        )
 
-    if furnished is not None:
 
-        if "furnished" in matched_preferences:
-
-            if furnished:
-
-                strengths.append(
-                    "Furnished as requested"
-                )
-
-            else:
-
-                strengths.append(
-                    "Unfurnished as requested"
-                )
-
-        elif "furnished" in unmatched_preferences:
-
-            if furnished:
-
-                weaknesses.append(
-                    "The house is not furnished "
-                    "as requested"
-                )
-
-            else:
-
-                weaknesses.append(
-                    "The house is furnished, "
-                    "but you requested an "
-                    "unfurnished property"
-                )
-
-    # -------------------------
-    # PARKING EXPLANATION
-    # -------------------------
+def _explain_parking(preferences, matched, unmatched, strengths, weaknesses, house):
     parking = preferences.get("parking")
+    if parking is None:
+        return
+    if "parking" in matched:
+        strengths.append(
+            "Parking is available as requested" if parking else "No parking, matching your preference"
+        )
+    elif "parking" in unmatched:
+        weaknesses.append(
+            "Parking was requested but is unavailable"
+            if parking
+            else "Parking is available, although you preferred no parking"
+        )
 
-    if parking is not None:
 
-        if "parking" in matched_preferences:
+_EXPLAINERS = (
+    _explain_location,
+    _explain_budget,
+    _explain_bedrooms,
+    _explain_furnished,
+    _explain_parking,
+)
 
-            if parking:
 
-                strengths.append(
-                    "Parking is available "
-                    "as requested"
-                )
-
-            else:
-
-                strengths.append(
-                    "No parking, matching "
-                    "your preference"
-                )
-
-        elif "parking" in unmatched_preferences:
-
-            if parking:
-
-                weaknesses.append(
-                    "Parking was requested "
-                    "but is unavailable"
-                )
-
-            else:
-
-                weaknesses.append(
-                    "Parking is available, "
-                    "although you preferred "
-                    "no parking"
-                )
-
-    # -------------------------
-    # PRIORITY INFORMATION
-    # -------------------------
-    must_have_failures = []
-
-    for preference_name in unmatched_preferences:
-
-        priority_name = preference_name
-
-        if preference_name == "minimum_budget":
-
-            priority_name = "budget"
-
-        if (
-            priority.get(priority_name)
-            == "must_have"
-        ):
-
-            must_have_failures.append(
-                priority_name
-            )
-
-    # -------------------------
-    # SUMMARY
-    # -------------------------
+def _summarise(matched, unmatched, must_have_failures) -> str:
     if must_have_failures:
+        return (
+            "This house matches several of your preferences, but does not satisfy "
+            f"your must-have preference(s): {', '.join(must_have_failures)}."
+        )
+    if matched and not unmatched:
+        return "Excellent match. This house satisfies all of your specified preferences."
+    if len(matched) >= 3:
+        return "Good overall match with several of your preferences satisfied."
+    if matched:
+        return "Partial match. Some of your preferences are satisfied."
+    return "Limited match. This house does not satisfy most of your specified preferences."
 
-        formatted_preferences = ", ".join(
-            must_have_failures
+
+def generate_house_explanation(house, preferences, score_result, budget_context=None):
+    """Explain why ``house`` received ``score_result``.
+
+    ``budget_context`` (optional) carries ``original_max_rent`` when the
+    engine had to relax the budget, so the explanation can state plainly that
+    a property costs more than the user originally asked for.
+    """
+    matched = score_result.get("matched_preferences", [])
+    unmatched = score_result.get("unmatched_preferences", [])
+    priority = preferences.get("priority") or {}
+
+    strengths: list[str] = []
+    weaknesses: list[str] = []
+    for explain in _EXPLAINERS:
+        explain(preferences, matched, unmatched, strengths, weaknesses, house)
+
+    original_max_rent = (budget_context or {}).get("original_max_rent")
+    if original_max_rent is not None and house.rent > float(original_max_rent):
+        weaknesses.append(
+            f"Rent is {_rupees(house.rent - float(original_max_rent))} above your original "
+            f"budget of {_rupees(original_max_rent)} (shown because the budget was relaxed)"
         )
 
-        summary = (
-            "This house matches several of your "
-            "preferences, but does not satisfy "
-            f"your must-have preference(s): "
-            f"{formatted_preferences}."
-        )
-
-    elif (
-        len(matched_preferences) > 0
-        and len(unmatched_preferences) == 0
-    ):
-
-        summary = (
-            "Excellent match. This house "
-            "satisfies all of your specified "
-            "preferences."
-        )
-
-    elif len(matched_preferences) >= 3:
-
-        summary = (
-            "Good overall match with several "
-            "of your preferences satisfied."
-        )
-
-    elif len(matched_preferences) > 0:
-
-        summary = (
-            "Partial match. Some of your "
-            "preferences are satisfied."
-        )
-
-    else:
-
-        summary = (
-            "Limited match. This house does "
-            "not satisfy most of your "
-            "specified preferences."
-        )
-
-    # -------------------------
-    # RETURN EXPLANATION
-    # -------------------------
     return {
-        "summary": summary,
+        "summary": _summarise(matched, unmatched, must_have_failures_for(unmatched, priority)),
         "strengths": strengths,
-        "weaknesses": weaknesses
+        "weaknesses": weaknesses,
     }
