@@ -36,11 +36,13 @@ SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool("SECURE_HSTS_INCLUDE_SUBDOMAINS", True
 SECURE_HSTS_PRELOAD = env_bool("SECURE_HSTS_PRELOAD", False)
 SECURE_REDIRECT_EXEMPT = [r"^api/health/$"]
 
-# Cookies
-SESSION_COOKIE_SECURE = True
-CSRF_COOKIE_SECURE = True
+# Cookies are Secure (HTTPS-only) by default. SECURE_COOKIES=False exists
+# solely for running the production stack locally over plain HTTP.
+SECURE_COOKIES = env_bool("SECURE_COOKIES", True)
+SESSION_COOKIE_SECURE = SECURE_COOKIES
+CSRF_COOKIE_SECURE = SECURE_COOKIES
 CSRF_COOKIE_HTTPONLY = True
-REFRESH_COOKIE_SECURE = env_bool("REFRESH_COOKIE_SECURE", True)
+REFRESH_COOKIE_SECURE = SECURE_COOKIES
 
 STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
