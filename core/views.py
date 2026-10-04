@@ -1,9 +1,10 @@
-from django.db import connection
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
+
+from .health import health_status
 
 
 class HealthView(APIView):
@@ -19,14 +20,5 @@ class HealthView(APIView):
         )
     )
     def get(self, request):
-        try:
-            with connection.cursor() as cursor:
-                cursor.execute("SELECT 1")
-            database = "ok"
-        except Exception:  # noqa: BLE001 - report, never raise, from a probe
-            database = "unavailable"
-        healthy = database == "ok"
-        return Response(
-            {"status": "ok" if healthy else "degraded", "database": database},
-            status=200 if healthy else 503,
-        )
+        payload, status_code = health_status()
+        return Response(payload, status=status_code)

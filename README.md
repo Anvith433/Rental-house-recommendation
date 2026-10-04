@@ -20,7 +20,7 @@ It is a modular Django monolith (Django REST Framework, PostgreSQL) with a React
 - [Security](#security)
 - [Frontend](#frontend)
 - [Running locally](#running-locally)
-- [Docker setup](#docker-setup)
+- [Docker setup](#docker-setup) · [Deployment guide](DEPLOYMENT.md)
 - [Environment variables](#environment-variables)
 - [Testing](#testing)
 - [Performance](#performance)
@@ -422,6 +422,8 @@ npm run build
 ---
 
 ## Docker setup
+
+> **Step-by-step guide:** [DEPLOYMENT.md](DEPLOYMENT.md) covers running locally on Windows, macOS or Linux, and free public hosting on Render + Neon.
 
 ```bash
 cp .env.example .env

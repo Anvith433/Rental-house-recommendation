@@ -195,9 +195,26 @@ class RequestIdTests(TestCase):
         self.assertRegex(response["X-Request-ID"], r"^[0-9a-f]{32}$")
 
 
+@override_settings(ALLOWED_HOSTS=["rentwise.example"])
+class HostValidationTests(TestCase):
+    def test_health_probe_works_for_internal_hosts(self):
+        response = self.client.get("/api/health/", HTTP_HOST="10.0.0.7:10000")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"status": "ok", "database": "ok"})
+
+    def test_other_paths_reject_unknown_hosts_with_json(self):
+        response = self.client.get("/api/properties/", HTTP_HOST="evil.example")
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["error"]["code"], "BAD_REQUEST")
+
+    def test_allowed_host_is_served(self):
+        response = self.client.get("/api/properties/", HTTP_HOST="rentwise.example")
+        self.assertEqual(response.status_code, 200)
+
+
 class SecurityHeaderTests(TestCase):
     def test_security_headers_present(self):
-        response = self.client.get("/api/health/")
+        response = self.client.get("/api/properties/")
         self.assertEqual(response["X-Content-Type-Options"], "nosniff")
         self.assertEqual(response["X-Frame-Options"], "DENY")
         self.assertEqual(response["Referrer-Policy"], "same-origin")

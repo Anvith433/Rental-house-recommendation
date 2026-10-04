@@ -9,7 +9,7 @@ from django.core.exceptions import ImproperlyConfigured
 
 from .base import *  # noqa: F401,F403
 from .base import DATABASES, jwt_settings
-from .env import env_bool, env_int, env_list, env_required
+from .env import env_bool, env_int, env_list, env_required, env_str
 
 DEBUG = False
 
@@ -17,6 +17,9 @@ SECRET_KEY = env_required("DJANGO_SECRET_KEY")
 SIMPLE_JWT = jwt_settings(SECRET_KEY)
 
 ALLOWED_HOSTS = env_list("ALLOWED_HOSTS")
+# Render provides the service's own public hostname; trust it automatically.
+if env_str("RENDER_EXTERNAL_HOSTNAME"):
+    ALLOWED_HOSTS.append(env_str("RENDER_EXTERNAL_HOSTNAME"))
 if not ALLOWED_HOSTS:
     raise ImproperlyConfigured("ALLOWED_HOSTS must be set in production.")
 
