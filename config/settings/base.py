@@ -177,6 +177,12 @@ SPECTACULAR_SETTINGS = {
     "SERVE_INCLUDE_SCHEMA": False,
     "COMPONENT_SPLIT_REQUEST": True,
     "SCHEMA_PATH_PREFIX": r"/api/",
+    "ENUM_NAME_OVERRIDES": {
+        "ListingStatusEnum": "rentals.choices.ListingStatus",
+        "InquiryStatusEnum": "rentals.models.Inquiry.Status",
+        "PriorityLevelEnum": "rentals.choices.Priority",
+        "BedroomModeEnum": "rentals.choices.BedroomMode",
+    },
 }
 
 API_DOCS_ENABLED = env_bool("API_DOCS_ENABLED", True)

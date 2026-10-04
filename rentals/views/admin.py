@@ -1,4 +1,5 @@
 from django.db.models import Count, Q
+from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema
 from rest_framework import filters, mixins, serializers, viewsets
 from rest_framework.response import Response
@@ -20,7 +21,7 @@ class AdminAnalyticsView(APIView):
 
     permission_classes = [IsAdminRole]
 
-    @extend_schema(responses=serializers.DictField())
+    @extend_schema(responses=OpenApiTypes.OBJECT)
     def get(self, request):
         return Response(platform_analytics())
 

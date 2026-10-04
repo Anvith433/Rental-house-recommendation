@@ -11,7 +11,7 @@ MAX_SEARCH_BEDROOMS = 100
 
 
 def _priority_field():
-    return serializers.ChoiceField(choices=Priority.values, required=False)
+    return serializers.ChoiceField(choices=Priority.choices, required=False)
 
 
 class RecommendationPrioritySerializer(serializers.Serializer):
@@ -40,7 +40,7 @@ class RecommendationPreferencesSerializer(serializers.Serializer):
     min_rent = serializers.FloatField(required=False, min_value=0, max_value=MAX_SEARCH_RENT)
     bedrooms = serializers.IntegerField(required=False, min_value=1, max_value=MAX_SEARCH_BEDROOMS)
     bedroom_mode = serializers.ChoiceField(
-        choices=BedroomMode.values, required=False, default=BedroomMode.EXACT
+        choices=BedroomMode.choices, required=False, default=BedroomMode.EXACT
     )
     furnished = serializers.BooleanField(required=False)
     parking = serializers.BooleanField(required=False)

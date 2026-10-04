@@ -27,7 +27,7 @@ class UserPreferenceSerializer(serializers.ModelSerializer):
     bedrooms = serializers.IntegerField(
         required=False, allow_null=True, min_value=1, max_value=MAX_ROOMS
     )
-    bedroom_mode = serializers.ChoiceField(choices=BedroomMode.values, required=False)
+    bedroom_mode = serializers.ChoiceField(choices=BedroomMode.choices, required=False)
     priority = RecommendationPrioritySerializer(required=False)
 
     class Meta:
