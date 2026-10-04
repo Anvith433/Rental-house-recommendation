@@ -38,17 +38,17 @@ services:
         value: "22"
     routes:
       # Same-origin API: the browser talks only to this site, so the HttpOnly
-      # refresh cookie works without cross-site CORS. If Render gives the API a
-      # different URL than rentwise-api.onrender.com, update these three lines.
+      # refresh cookie works without cross-site CORS. These must match the
+      # rentwise-api service's URL shown in the Render dashboard.
       - type: rewrite
         source: /api/*
-        destination: https://rentwise-api.onrender.com/api/*
+        destination: https://rentwise-api-nl1z.onrender.com/api/*
       - type: rewrite
         source: /django-admin/*
-        destination: https://rentwise-api.onrender.com/django-admin/*
+        destination: https://rentwise-api-nl1z.onrender.com/django-admin/*
       - type: rewrite
         source: /static/*
-        destination: https://rentwise-api.onrender.com/static/*
+        destination: https://rentwise-api-nl1z.onrender.com/static/*
       # Single-page app: every other path serves index.html.
       - type: rewrite
         source: /*
